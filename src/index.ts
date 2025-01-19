@@ -1,65 +1,93 @@
 import { DurableObject } from "cloudflare:workers";
+import { wordList } from "./wordlist";
 
-/**
- * Welcome to Cloudflare Workers! This is your first Durable Objects application.
- *
- * - Run `npm run dev` in your terminal to start a development server
- * - Open a browser tab at http://localhost:8787/ to see your Durable Object in action
- * - Run `npm run deploy` to publish your application
- *
- * Bind resources to your worker in `wrangler.json`. After adding bindings, a type definition for the
- * `Env` object can be regenerated with `npm run cf-typegen`.
- *
- * Learn more at https://developers.cloudflare.com/durable-objects
- */
 
-/** A Durable Object's behavior is defined in an exported Javascript class */
+
+// Durable Object
 export class MyDurableObject extends DurableObject<Env> {
-	/**
-	 * The constructor is invoked once upon creation of the Durable Object, i.e. the first call to
-	 * 	`DurableObjectStub::get` for a given identifier (no-op constructors can be omitted)
-	 *
-	 * @param ctx - The interface for interacting with Durable Object state
-	 * @param env - The interface to reference bindings declared in wrangler.json
-	 */
-	constructor(ctx: DurableObjectState, env: Env) {
-		super(ctx, env);
-	}
+  constructor(ctx: DurableObjectState, env: Env) {
+    super(ctx, env);
+  }
 
-	/**
-	 * The Durable Object exposes an RPC method sayHello which will be invoked when when a Durable
-	 *  Object instance receives a request from a Worker via the same method invocation on the stub
-	 *
-	 * @param name - The name provided to a Durable Object instance from a Worker
-	 * @returns The greeting to be sent back to the Worker
-	 */
-	async sayHello(name: string): Promise<string> {
-		return `Hello, ${name}!`;
-	}
+  async fetch(request: Request): Promise<Response> {
+    // Get WebSocket pair
+    const webSocketPair = new WebSocketPair();
+    const [client, server] = Object.values(webSocketPair);
+    // Accept WebSocket and set appropriate tag so we can find it later.
+    if (request.url.endsWith('/send')) {
+      this.ctx.acceptWebSocket(server, ['sender']);
+      // Send mnemonic as first message
+      this.ctx.waitUntil(new Promise(res => {
+        server.send(JSON.stringify({ code: request.headers.get('Code') }));
+        res(null);
+      }))
+    } else {
+      this.ctx.acceptWebSocket(server, ['receiver']);
+    }
+
+    // Return the client connection with 101 Switching Protocols.
+    return new Response(null, {
+      status: 101,
+      webSocket: client,
+    });
+  }
+
+  handleSender(message?: ArrayBuffer | string) {
+    const [receiver] = this.ctx.getWebSockets('receiver');
+    receiver.send(`[FROM SENDER]: ${message}`)
+  }
+
+  handleReceiver(message?: ArrayBuffer | string) {
+    const [sender] = this.ctx.getWebSockets('sender');
+    sender.send(`[FROM RECEIVER]: ${message}`)
+  }
+
+  webSocketMessage(ws: WebSocket, message: ArrayBuffer | string) {
+    const [tag] = this.ctx.getTags(ws);
+    switch (tag) {
+      case 'sender': this.handleSender(message); break;
+      case 'receiver': this.handleReceiver(message); break;
+    }
+  }
 }
 
+const mnemonic = () => {
+  const MNEMONIC_LEN = 5;
+  const words = [];
+  for (let i = 0; i < MNEMONIC_LEN; i++) {
+    words.push(wordList[Math.floor(Math.random() * (wordList.length - 1))])
+  }
+
+  return words.join('-');
+};
+
+// Worker
 export default {
-	/**
-	 * This is the standard fetch handler for a Cloudflare Worker
-	 *
-	 * @param request - The request submitted to the Worker from the client
-	 * @param env - The interface to reference bindings declared in wrangler.json
-	 * @param ctx - The execution context of the Worker
-	 * @returns The response to be sent back to the client
-	 */
-	async fetch(request, env, ctx): Promise<Response> {
-		// We will create a `DurableObjectId` using the pathname from the Worker request
-		// This id refers to a unique instance of our 'MyDurableObject' class above
-		let id: DurableObjectId = env.MY_DURABLE_OBJECT.idFromName(new URL(request.url).pathname);
+  async fetch(request, env, ctx): Promise<Response> {
+    if (request.method == 'GET' && request.headers.get('Upgrade') == 'websocket') {
+      const url = new URL(request.url);
+      if (url.pathname.endsWith('/send')) {
+        const code = mnemonic();
+        let id: DurableObjectId = env.MY_DURABLE_OBJECT.idFromName(code);
+        let stub = env.MY_DURABLE_OBJECT.get(id);
+        const req = new Request(request)
+        req.headers.set('Code', code);
 
-		// This stub creates a communication channel with the Durable Object instance
-		// The Durable Object constructor will be invoked upon the first call for a given id
-		let stub = env.MY_DURABLE_OBJECT.get(id);
+        return await stub.fetch(req);
+      } else if (url.pathname.endsWith('/receive')) {
+        const code = url.searchParams.get('code')
+        if (code) {
+          let id: DurableObjectId = env.MY_DURABLE_OBJECT.idFromName(code);
+          let stub = env.MY_DURABLE_OBJECT.get(id);
 
-		// We call the `sayHello()` RPC method on the stub to invoke the method on the remote
-		// Durable Object instance
-		let greeting = await stub.sayHello("world");
+          return await stub.fetch(request);
+        } else {
+          return new Response('Missing "code" parameter.', { status: 400 });
+        }
+      }
+      return new Response('You sure you got the path right?', { status: 404 });
+    }
+    return new Response('Worker expected Upgrade: websocket', { status: 400 });
 
-		return new Response(greeting);
-	},
+  },
 } satisfies ExportedHandler<Env>;
