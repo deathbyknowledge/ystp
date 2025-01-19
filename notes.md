@@ -360,4 +360,24 @@ export class MyDurableObject extends DurableObject<Env> {
 }
 ```
 
+# Add HTML client
+```
+// wrangler.json, so we can generate types for the html modules
+  "rules": [
+    {
+      "type": "Text",
+      "globs": [
+        "**/*.html"
+      ],
+      "fallthrough": true
+    }
+  ]
+```
 
+```
+import index from './index.html'
+...
+app.get('/', c => c.html(index))
+```
+
+Run `npm run cf-typegen`

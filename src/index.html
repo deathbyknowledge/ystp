@@ -1,0 +1,176 @@
+<html>
+
+<head>
+    <style>
+        body {
+            font-family: monospace;
+            margin: 15px
+        }
+    </style>
+</head>
+<title>YSTP</title>
+
+<body>
+    <center>
+        <h1>Y(our)S(uper)T(ransfer)P(rogram)</h1>
+        <br />
+        <br />
+        <br />
+        <div style="display:flex;width: 75%;justify-content: space-evenly;">
+            <div>
+                <h2>Wanna Send? 🚀</h2>
+                <div>
+                    <input type="file" id="file-btn" />
+                </div>
+                <br />
+                <div>
+                    <big id="code"></big>
+                </div>
+            </div>
+            <div>
+                <h2>Got mail? 📩</h2>
+                <div>
+                    Code
+                    <input id="code-input" />
+                    <button id="connect-btn">Connect</button>
+                </div>
+                <br />
+                <div id="status"></div>
+            </div>
+        </div>
+        <br />
+        <br />
+        <button id="restore-btn">Restore</button>
+    </center>
+</body>
+<script>
+    // Send script
+    let sender;
+    let code;
+    let file;
+    document.getElementById('file-btn').addEventListener('change', (e) => {
+        file = e.target.files[0];
+        if (!file) return;
+        sender = new WebSocket('/send');
+
+        sender.onopen = () => {
+            sender.send(JSON.stringify({ name: file.name, size: file.size }))
+        }
+
+        sender.onmessage = async (event) => {
+            if (!code) {
+                const msg = JSON.parse(event.data);
+                if (!msg.code) return;
+                code = msg.code;
+                document.getElementById('code').innerHTML = `👨‍🍳 Code is ready: <b>${code}</b>`
+            } else {
+                if (event.data == "LET_IT_RIP") {
+                    document.getElementById('code').innerHTML = `
+                      <div>
+                        <progress id="progress-sender" max="100" value="0" style="width:300px;"></progress>
+                        <span id="progress-sender-label">0%</span>
+                      </div>`
+                    const chunkSize = 64 * 1024; // 64 KB
+                    let offset = 0;
+
+                    while (offset < file.size) {
+                        const blobPart = file.slice(offset, offset + chunkSize);
+                        const arrayBuffer = await blobPart.arrayBuffer();
+
+                        // Send each chunk over the WebSocket
+                        sender.send(arrayBuffer);
+                        const progressPercent = Math.floor((offset / file.size) * 100);
+                        offset += chunkSize;
+
+                        document.getElementById('progress-sender').value = progressPercent;
+                        document.getElementById('progress-sender-label').textContent = progressPercent + '%';
+                    }
+                    // Send a magic message (e.g., "EOF") to indicate we're done
+                    sender.send('EOF');
+                    document.getElementById('code').innerHTML = `Sent ✅`
+                    sender.close();
+                }
+            }
+        };
+    });
+
+    // Receive script
+    let receiver;
+    let metadata;
+    let receivedChunks = [];
+    let totalReceived = 0;
+
+    document.getElementById('connect-btn').addEventListener('click', () => {
+        const code = document.getElementById('code-input').value.trim();
+        if (!code) {
+            alert('Enter a code pretty please.');
+            return;
+        }
+        receiver = new WebSocket('/receive/' + encodeURIComponent(code));
+
+        receiver.onopen = () => {
+            document.getElementById('status').innerHTML = `<b>Connected.</b>`
+        }
+
+        receiver.onmessage = (event) => {
+            if (!metadata) {
+                msg = JSON.parse(event.data);
+                if (!msg.name || !msg.size) return;
+                metadata = msg;
+                document.getElementById('status').innerHTML = `Accept file '${metadata.name}' (${metadata.size} bytes)? <button id="accept-btn">Accept</button>`
+                document.getElementById('accept-btn').addEventListener('click', () => {
+                    receiver.send('LET_IT_RIP');
+                    document.getElementById('status').innerHTML = `
+                      <div>
+                        <progress id="progress-receiver" max="100" value="0" style="width:300px;"></progress>
+                        <span id="progress-receiver-label">0%</span>
+                      </div>`
+                })
+            } else {
+                if (typeof event.data == 'string' && event.data === 'EOF') {
+                    document.getElementById('status').innerText = 'File transfer complete.';
+                    const blob = new Blob(receivedChunks);
+                    const downloadUrl = URL.createObjectURL(blob);
+
+                    // Create a link to prompt a file download
+                    document.getElementById('status').innerHTML = `Ready ✅<br/><a href="${downloadUrl}" download="${metadata.name}">Press to save to disk</a>`;
+                    receiver.close();
+                } else {
+                    // Accumulate each chunk
+                    receivedChunks.push(event.data);
+                    // Update progress
+                    totalReceived += event.data.size || 0;
+                    const progressPercent = Math.floor((totalReceived / metadata.size) * 100);
+                    document.getElementById('progress-receiver').value = progressPercent;
+                    document.getElementById('progress-receiver-label').textContent = progressPercent + '%';
+                }
+            }
+        }
+
+        receiver.onerror = (error) => {
+            console.error('WebSocket error:', error);
+            document.getElementById('status').innerText = 'Error occurred. Check console.';
+        };
+
+        receiver.onclose = () => {
+            receiver.close();
+        };
+    });
+
+    document.getElementById('restore-btn').addEventListener('click', () => {
+        sender = undefined;
+        code = undefined;
+        file = undefined;
+        receiver = undefined;
+        metadata = undefined;
+        receivedChunks = [];
+        totalReceived = 0;
+
+        document.getElementById('status').innerHTML = '';
+        document.getElementById('code').innerHTML = ''
+
+    })
+
+</script>
+
+</html>

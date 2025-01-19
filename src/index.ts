@@ -2,6 +2,7 @@ import { DurableObject } from "cloudflare:workers";
 import { mnemonic } from "./mnemonic";
 import { Hono } from 'hono';
 import { createMiddleware } from 'hono/factory'
+import index from './index.html'
 
 enum Step {
   Created,
@@ -188,4 +189,5 @@ app.get('/receive/:code', (c) => {
   return stub.fetch(c.req.raw)
 })
 
+app.get('/', c => c.html(index))
 export default app;

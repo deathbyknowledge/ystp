@@ -3,3 +3,7 @@
 interface Env {
 	MY_DURABLE_OBJECT: DurableObjectNamespace<import("./src/index").MyDurableObject>;
 }
+declare module "*.html" {
+	const value: string;
+	export default value;
+}
