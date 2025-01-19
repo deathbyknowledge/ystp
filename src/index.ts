@@ -1,6 +1,7 @@
 import { DurableObject } from "cloudflare:workers";
 import { wordList } from "./wordlist";
-
+import { Hono } from 'hono';
+import { createMiddleware } from 'hono/factory'
 
 
 // Durable Object
@@ -61,33 +62,36 @@ const mnemonic = () => {
   return words.join('-');
 };
 
-// Worker
-export default {
-  async fetch(request, env, ctx): Promise<Response> {
-    if (request.method == 'GET' && request.headers.get('Upgrade') == 'websocket') {
-      const url = new URL(request.url);
-      if (url.pathname.endsWith('/send')) {
-        const code = mnemonic();
-        let id: DurableObjectId = env.MY_DURABLE_OBJECT.idFromName(code);
-        let stub = env.MY_DURABLE_OBJECT.get(id);
-        const req = new Request(request)
-        req.headers.set('Code', code);
+type Bindings = {
+  MY_DURABLE_OBJECT: DurableObjectNamespace<MyDurableObject>
+}
 
-        return await stub.fetch(req);
-      } else if (url.pathname.endsWith('/receive')) {
-        const code = url.searchParams.get('code')
-        if (code) {
-          let id: DurableObjectId = env.MY_DURABLE_OBJECT.idFromName(code);
-          let stub = env.MY_DURABLE_OBJECT.get(id);
+const app = new Hono<{ Bindings: Bindings }>();
 
-          return await stub.fetch(request);
-        } else {
-          return new Response('Missing "code" parameter.', { status: 400 });
-        }
-      }
-      return new Response('You sure you got the path right?', { status: 404 });
-    }
-    return new Response('Worker expected Upgrade: websocket', { status: 400 });
 
-  },
-} satisfies ExportedHandler<Env>;
+// WS Middleware
+const ws = createMiddleware<{ Bindings: Bindings }>(async (c, next) => {
+  const upgrade = c.req.header('Upgrade');
+  if (upgrade != 'websocket')
+    return new Response("Exepected websocket upgrade", { status: 426 });
+  await next();
+});
+
+app.on('GET', ['/send', '/receive/*'], ws);
+
+app.get('/send', (c) => {
+  const code = mnemonic();
+  let id: DurableObjectId = c.env.MY_DURABLE_OBJECT.idFromName(code);
+  let stub = c.env.MY_DURABLE_OBJECT.get(id);
+  const req = new Request(c.req.raw)
+  req.headers.set('Code', code);
+  return stub.fetch(req);
+})
+
+app.get('/receive/:code', (c) => {
+  const id = c.env.MY_DURABLE_OBJECT.idFromName(c.req.param('code'));
+  const stub = c.env.MY_DURABLE_OBJECT.get(id);
+  return stub.fetch(c.req.raw)
+})
+
+export default app;

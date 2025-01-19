@@ -13,13 +13,13 @@ import worker from "../src";
 const IncomingRequest = Request<unknown, IncomingRequestCfProperties>;
 
 it("400 when not a websocket request", async () => {
-  const request = new IncomingRequest("http://example.com/");
+  const request = new IncomingRequest("http://example.com/send");
   // Create an empty context to pass to `worker.fetch()`
   const ctx = createExecutionContext();
   const response = await SELF.fetch(request, env);
   // Wait for all `Promise`s passed to `ctx.waitUntil()` to settle before running test assertions
   await waitOnExecutionContext(ctx);
-  expect(response.status).toBe(400);
+  expect(response.status).toBe(426);
 });
 
 it("WebSocket connects successfully", async () => {
@@ -82,7 +82,7 @@ it("Sender and receiver can communicate", async () => {
   const codeMsg = await codePromise;
   const { code } = JSON.parse(codeMsg as string);
 
-  const receiveReq = new IncomingRequest(`http://example.com/receive?code=${code}`, { headers: { Upgrade: 'websocket' } });
+  const receiveReq = new IncomingRequest(`http://example.com/receive/${code}`, { headers: { Upgrade: 'websocket' } });
   const receiveRes = await SELF.fetch(receiveReq, env);
   expect(receiveRes.status).toBe(101);
 
