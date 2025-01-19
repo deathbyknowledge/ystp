@@ -1,5 +1,17 @@
 //https://github.com/schollz/mnemonicode/blob/master/word_list.go
-export const wordList: string[] = [
+
+const MNEMONIC_LEN = 5;
+
+export const mnemonic = () => {
+    const words = [];
+    for (let i = 0; i < MNEMONIC_LEN; i++) {
+        words.push(wordList[Math.floor(Math.random() * (wordList.length - 1))])
+    }
+
+    return words.join('-');
+};
+
+const wordList: string[] = [
     "academy", "acrobat", "active", "actor", "adam", "admiral",
     "adrian", "africa", "agenda", "agent", "airline", "airport",
     "aladdin", "alarm", "alaska", "albert", "albino", "album",

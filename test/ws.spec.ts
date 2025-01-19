@@ -12,6 +12,12 @@ import worker from "../src";
 // `Request` to pass to `worker.fetch()`.
 const IncomingRequest = Request<unknown, IncomingRequestCfProperties>;
 
+const nextMessage = (ws: WebSocket) => {
+  return new Promise((resolve) => {
+    ws.addEventListener("message", (event) => resolve(event.data));
+  });
+}
+
 it("400 when not a websocket request", async () => {
   const request = new IncomingRequest("http://example.com/send");
   // Create an empty context to pass to `worker.fetch()`
@@ -50,10 +56,7 @@ it("Sender receives mnemonic", async () => {
 
   const webSocket = response.webSocket;
   expect(webSocket).toBeDefined();
-  const promise = new Promise((resolve) => {
-    webSocket?.addEventListener("message", (event) => resolve(event.data));
-  });
-
+  const promise = nextMessage(webSocket!);
   webSocket?.accept();
   const msg = await promise;
   expect(JSON.parse(msg as string)).toHaveProperty('code');
@@ -64,51 +67,53 @@ it("Sender receives mnemonic", async () => {
 })
 
 it("Sender and receiver can communicate", async () => {
-  const sendReq = new IncomingRequest("http://example.com/send", { headers: { Upgrade: 'websocket' } });
+  let request = new IncomingRequest("http://example.com/send", { headers: { Upgrade: 'websocket' } });
   // Create an empty context to pass to `worker.fetch()`
   const ctx = createExecutionContext();
-  const sendRes = await SELF.fetch(sendReq, env);
-
+  let response = await SELF.fetch(request, env);
   // Wait for all `Promise`s passed to `ctx.waitUntil()` to settle before running test assertions
   await waitOnExecutionContext(ctx);
-  expect(sendRes.status).toBe(101);
+  expect(response.status).toBe(101);
 
-  const sender = sendRes.webSocket;
-  const codePromise = new Promise((resolve) => {
-    sender?.addEventListener("message", (event) => resolve(event.data));
-  });
+  const sender = response.webSocket!;
+  expect(sender).toBeDefined();
+  const codeMessage = nextMessage(sender)
 
-  sender?.accept();
-  const codeMsg = await codePromise;
-  const { code } = JSON.parse(codeMsg as string);
+  sender.accept();
+  let msg = await codeMessage;
+  const { code } = JSON.parse(msg as string);
+  expect(code).toBeDefined();
+  sender.send(JSON.stringify({ name: 'don_quixote.txt', size: 2300000 }))
 
-  const receiveReq = new IncomingRequest(`http://example.com/receive/${code}`, { headers: { Upgrade: 'websocket' } });
-  const receiveRes = await SELF.fetch(receiveReq, env);
-  expect(receiveRes.status).toBe(101);
+  request = new IncomingRequest(`http://example.com/receive/${code}`, { headers: { Upgrade: 'websocket' } });
+  response = await SELF.fetch(request, env);
+  const receiver = response.webSocket!;
+  const metadataMessage = nextMessage(receiver);
+  receiver.accept();
+  msg = await metadataMessage;
+  console.log(msg);
+  const { name, size } = JSON.parse(msg as string);
+  expect(name).toBe('don_quixote.txt');
+  expect(size).toBe(2300000);
+  receiver.send('LET_IT_RIP');
+  sender.send('HELLO ');
+  sender.send('WORLD!');
+  sender.send('EOF');
+  const msg1 = await nextMessage(receiver);
+  expect(msg1).toBe('HELLO ')
+  const msg2 = await nextMessage(receiver);
+  expect(msg2).toBe('WORLD!')
+  const msg3 = await nextMessage(receiver);
+  expect(msg3).toBe('EOF')
 
-  const receiver = receiveRes.webSocket;
+  const rclosed = new Promise((resolve) => receiver.addEventListener("close", (event) => resolve(event)));
+  const sclosed = new Promise((resolve) => sender.addEventListener("close", (event) => resolve(event)));
 
-  const rPromise = new Promise((resolve) => {
-    receiver?.addEventListener("message", (event) => resolve(event.data));
-  });
+  expect(await rclosed).toBeDefined();
+  expect(receiver.readyState).toBe(WebSocket.CLOSING);
+  expect(await sclosed).toBeDefined();
+  expect(sender.readyState).toBe(WebSocket.CLOSING);
 
-  receiver?.accept();
-
-  const sMsg = 'Hello from sender!';
-  sender?.send(sMsg)
-  let msg = await rPromise;
-  expect(msg).toBe(`[FROM SENDER]: ${sMsg}`)
-
-  const sPromise = new Promise((resolve) => {
-    sender?.addEventListener("message", (event) => resolve(event.data));
-  });
-
-  const rMsg = 'Hello from receiver!';
-  receiver?.send(rMsg)
-  msg = await sPromise;
-  expect(msg).toBe(`[FROM RECEIVER]: ${rMsg}`)
-
-  // Close connections
-  sender?.close();
-  receiver?.close();
+  sender.close();
+  receiver.close();
 });
