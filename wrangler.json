@@ -9,9 +9,18 @@
   "migrations": [
     {
       "new_classes": [
-        "Relay"
+        "MyDurableObject"
       ],
       "tag": "v1"
+    },
+    {
+      "renamed_classes": [
+        {
+          "to": "Relay",
+          "from": "MyDurableObject"
+        }
+      ],
+      "tag": "v2"
     }
   ],
   "durable_objects": {
