@@ -1,6 +1,6 @@
 //https://github.com/schollz/mnemonicode/blob/master/word_list.go
 
-const MNEMONIC_LEN = 5;
+const MNEMONIC_LEN = 4;
 
 export const mnemonic = () => {
     const words = [];

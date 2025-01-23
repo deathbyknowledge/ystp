@@ -6,6 +6,9 @@
   "compatibility_flags": [
     "nodejs_compat"
   ],
+  "assets": {
+    "directory": "./public"
+  },
   "migrations": [
     {
       "new_classes": [

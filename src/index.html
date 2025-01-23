@@ -43,133 +43,74 @@
         <button id="restore-btn">Restore</button>
     </center>
 </body>
+<script src="/client.js"></script>
 <script>
-    // Send script
-    let sender;
-    let code;
-    let file;
     document.getElementById('file-btn').addEventListener('change', (e) => {
-        file = e.target.files[0];
+        const file = e.target.files[0];
         if (!file) return;
-        sender = new WebSocket('/send');
 
-        sender.onopen = () => {
-            sender.send(JSON.stringify({ name: file.name, size: file.size }))
-        }
+        const sender = new FileSender('/send');
 
-        sender.onmessage = async (event) => {
-            if (!code) {
-                const msg = JSON.parse(event.data);
-                if (!msg.code) return;
-                code = msg.code;
-                document.getElementById('code').innerHTML = `👨‍🍳 Code is ready: <b>${code}</b>`
-            } else {
-                if (event.data == "LET_IT_RIP") {
-                    document.getElementById('code').innerHTML = `
-                      <div>
+        sender.send(
+            file,
+            (code) => {
+                document.getElementById('code').innerHTML = `Code is ready: <b>${code}</b>`;
+            },
+            () => {
+                document.getElementById('code').innerHTML = `
+                    <div>
                         <progress id="progress-sender" max="100" value="0" style="width:300px;"></progress>
                         <span id="progress-sender-label">0%</span>
-                      </div>`
-                    const chunkSize = 64 * 1024; // 64 KB
-                    let offset = 0;
-
-                    while (offset < file.size) {
-                        const blobPart = file.slice(offset, offset + chunkSize);
-                        const arrayBuffer = await blobPart.arrayBuffer();
-
-                        // Send each chunk over the WebSocket
-                        sender.send(arrayBuffer);
-                        const progressPercent = Math.floor((offset / file.size) * 100);
-                        offset += chunkSize;
-
-                        document.getElementById('progress-sender').value = progressPercent;
-                        document.getElementById('progress-sender-label').textContent = progressPercent + '%';
-                    }
-                    // Send a magic message (e.g., "EOF") to indicate we're done
-                    sender.send('EOF');
-                    document.getElementById('code').innerHTML = `Sent ✅`
-                    sender.close();
-                }
+                    </div>`
+            },
+            (progress) => {
+                document.getElementById('progress-sender').value = progress;
+                document.getElementById('progress-sender-label').textContent = progress + '%';
+            },
+            () => {
+                document.getElementById('code').innerHTML = `Sent ✅`;
             }
-        };
+        );
     });
-
-    // Receive script
-    let receiver;
-    let metadata;
-    let receivedChunks = [];
-    let totalReceived = 0;
-
     document.getElementById('connect-btn').addEventListener('click', () => {
         const code = document.getElementById('code-input').value.trim();
         if (!code) {
-            alert('Enter a code pretty please.');
+            alert("Enter a code, pretty please.");
             return;
         }
-        receiver = new WebSocket('/receive/' + encodeURIComponent(code));
 
-        receiver.onopen = () => {
-            document.getElementById('status').innerHTML = `<b>Connected.</b>`
-        }
+        const receiver = new FileReceiver('/receive');
 
-        receiver.onmessage = (event) => {
-            if (!metadata) {
-                msg = JSON.parse(event.data);
-                if (!msg.name || !msg.size) return;
-                metadata = msg;
-                document.getElementById('status').innerHTML = `Accept file '${metadata.name}' (${metadata.size} bytes)? <button id="accept-btn">Accept</button>`
+        receiver.connect(
+            code,
+            (metadata, acceptCallback) => {
+                document.getElementById('status').innerHTML = `Accept file '${metadata.name}' (${metadata.size} bytes)? <button id="accept-btn">Accept</button>`;
                 document.getElementById('accept-btn').addEventListener('click', () => {
-                    receiver.send('LET_IT_RIP');
+                    acceptCallback();
                     document.getElementById('status').innerHTML = `
-                      <div>
-                        <progress id="progress-receiver" max="100" value="0" style="width:300px;"></progress>
-                        <span id="progress-receiver-label">0%</span>
-                      </div>`
-                })
-            } else {
-                if (typeof event.data == 'string' && event.data === 'EOF') {
-                    document.getElementById('status').innerText = 'File transfer complete.';
-                    const blob = new Blob(receivedChunks);
-                    const downloadUrl = URL.createObjectURL(blob);
-
-                    // Create a link to prompt a file download
-                    document.getElementById('status').innerHTML = `Ready ✅<br/><a href="${downloadUrl}" download="${metadata.name}">Press to save to disk</a>`;
-                    receiver.close();
-                } else {
-                    // Accumulate each chunk
-                    receivedChunks.push(event.data);
-                    // Update progress
-                    totalReceived += event.data.size || 0;
-                    const progressPercent = Math.floor((totalReceived / metadata.size) * 100);
-                    document.getElementById('progress-receiver').value = progressPercent;
-                    document.getElementById('progress-receiver-label').textContent = progressPercent + '%';
-                }
+                        <div>
+                            <progress id="progress-receiver" max="100" value="0" style="width:300px;"></progress>
+                            <span id="progress-receiver-label">0%</span>
+                        </div>`;
+                });
+            },
+            (progress) => {
+                document.getElementById('progress-receiver').value = progress;
+                document.getElementById('progress-receiver-label').textContent = progress + "%";
+            },
+            (downloadUrl, filename) => {
+                document.getElementById('status').innerHTML = `Ready ✅<br/><a href="${downloadUrl}" download="${filename}">Press to save to disk</a>`;
+            },
+            (error) => {
+                document.getElementById('status').innerText = 'Error occurred. Check console.';
             }
-        }
-
-        receiver.onerror = (error) => {
-            console.error('WebSocket error:', error);
-            document.getElementById('status').innerText = 'Error occurred. Check console.';
-        };
-
-        receiver.onclose = () => {
-            receiver.close();
-        };
+        );
     });
 
     document.getElementById('restore-btn').addEventListener('click', () => {
-        sender = undefined;
-        code = undefined;
-        file = undefined;
-        receiver = undefined;
-        metadata = undefined;
-        receivedChunks = [];
-        totalReceived = 0;
-
         document.getElementById('status').innerHTML = '';
-        document.getElementById('code').innerHTML = ''
-
-    })
+        document.getElementById('code').innerHTML = '';
+    });
 
 </script>
 
