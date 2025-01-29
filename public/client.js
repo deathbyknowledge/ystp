@@ -64,7 +64,7 @@ class FileReceiver {
         if (!code) throw new Error("No code provided");
         this.ws = new WebSocket(`${this.url}/${encodeURIComponent(code)}`);
 
-        this.ws.onmessage = (event) => {
+        this.ws.onmessage = async (event) => {
             if (!this.metadata) {
                 const msg = JSON.parse(event.data);
                 if (!msg.name || !msg.size) return;

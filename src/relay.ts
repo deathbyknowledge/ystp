@@ -39,16 +39,14 @@ export class Relay extends DurableObject<Env> {
         return new Response('Session has already been created.', { status: 423, webSocket: client, });
       }
       this.ctx.acceptWebSocket(server, ['sender']);
+      // Ready to receive metadata through WS.
+      this.setStep(Step.WaitingMetadata);
 
       // Send mnemonic as first message
       this.ctx.waitUntil(new Promise(res => {
         server.send(JSON.stringify({ code: request.headers.get('Code') }));
         res(null);
       }))
-
-      // Ready to receive metadata through WS.
-      this.setStep(Step.WaitingMetadata);
-
     } else {
       if (await this.currentStep() != Step.WaitingReceiver) {
         return new Response('Session is not ready, try again later.', { status: 423, webSocket: client, });
@@ -146,7 +144,11 @@ export class Relay extends DurableObject<Env> {
     }
   }
 
-  webSocketClose(): void | Promise<void> {
-    this.shutdown();
+  webSocketClose(ws: WebSocket): void | Promise<void> {
+    const [tag] = this.ctx.getTags(ws);
+    switch (tag) {
+      case 'receiver': this.shutdown(); break;
+      case 'sender': this.sender().close(); break;
+    }
   }
 }
