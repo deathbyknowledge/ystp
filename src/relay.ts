@@ -146,7 +146,11 @@ export class Relay extends DurableObject<Env> {
     }
   }
 
-  webSocketClose(): void | Promise<void> {
-    this.shutdown();
+  webSocketClose(ws: WebSocket): void | Promise<void> {
+    const [tag] = this.ctx.getTags(ws);
+    switch (tag) {
+      case 'sender': this.sender().close(); break;
+      case 'receiver': this.shutdown(); break;
+    }
   }
 }
