@@ -6,6 +6,28 @@
             font-family: monospace;
             margin: 15px
         }
+
+				button, .input-file {
+						background: none;
+						color: inherit;
+						border: 2px solid black;
+						padding: 3px;
+						font: inherit;
+						font-weight: 600;
+						cursor: pointer;
+						outline: inherit;
+				}
+				.inverted {
+					background: black;
+					color: white;
+					padding: 5px;
+					font-weight: 600;
+					cursor: pointer;
+					outline: inherit;
+				}
+				input[type="file"] {
+					display: none;
+				}
     </style>
 </head>
 <title>YSTP</title>
@@ -20,7 +42,10 @@
             <div>
                 <h2>Wanna Send? 🚀</h2>
                 <div>
+									<label class="input-file">
                     <input type="file" id="file-btn" />
+										Pick file
+									</label>
                 </div>
                 <br />
                 <div>
@@ -62,7 +87,7 @@
                 const msg = JSON.parse(event.data);
                 if (!msg.code) return;
                 code = msg.code;
-                document.getElementById('code').innerHTML = `👨‍🍳 Code is ready: <b>${code}</b>`
+							document.getElementById('code').innerHTML = `👨‍🍳 Code is ready: <b>${code}</b><br/><br/><span onclick="navigator.clipboard.writeText('${location.origin}/?code=${code}')" class="inverted" >Copy to clipboard</span>`
             } else {
                 if (event.data == "LET_IT_RIP") {
                     document.getElementById('code').innerHTML = `
@@ -85,7 +110,7 @@
                         document.getElementById('progress-sender').value = progressPercent;
                         document.getElementById('progress-sender-label').textContent = progressPercent + '%';
                     }
-                    // Send a magic message (e.g., "EOF") to indicate we're done
+                    // Send a magic message to indicate we're done
                     sender.send('EOF');
                     document.getElementById('code').innerHTML = `Sent ✅`
                     sender.close();
@@ -170,6 +195,15 @@
         document.getElementById('code').innerHTML = ''
 
     })
+
+		window.addEventListener("load", (event) => {
+			const searchParams = new URLSearchParams(location.search);
+			const code = searchParams.get("code");
+			if (code) {
+				console.log('prefilling code', code);
+        document.getElementById('code-input').value = code;
+			}
+		});
 
 </script>
 
