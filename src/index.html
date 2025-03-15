@@ -7,27 +7,35 @@
             margin: 15px
         }
 
-				button, .input-file {
-						background: none;
-						color: inherit;
-						border: 2px solid black;
-						padding: 3px;
-						font: inherit;
-						font-weight: 600;
-						cursor: pointer;
-						outline: inherit;
-				}
-				.inverted {
-					background: black;
-					color: white;
-					padding: 5px;
-					font-weight: 600;
-					cursor: pointer;
-					outline: inherit;
-				}
-				input[type="file"] {
-					display: none;
-				}
+        button, .input-file {
+            background: none;
+            color: inherit;
+            border: 2px solid black;
+            padding: 3px;
+            font: inherit;
+            font-weight: 600;
+            cursor: pointer;
+            outline: inherit;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: transform 0.1s, box-shadow 0.1s;
+        }
+        button:active, .input-file:active {
+            transform: translateY(2px); /* Moves the button down by 2px */
+            background: #eee;
+            box-shadow: 0 2px 3px rgba(0, 0, 0, 0.1); /* Smaller shadow to simulate pressing */
+        }
+        .inverted {
+          background: black;
+          color: white;
+          padding: 5px;
+          font-weight: 600;
+          cursor: pointer;
+          outline: inherit;
+        }
+
+        input[type="file"] {
+          display: none;
+        }
     </style>
 </head>
 <title>YSTP</title>
@@ -42,10 +50,10 @@
             <div>
                 <h2>Wanna Send? 🚀</h2>
                 <div>
-									<label class="input-file">
+                  <label class="input-file">
                     <input type="file" id="file-btn" />
-										Pick file
-									</label>
+                    Pick file
+                  </label>
                 </div>
                 <br />
                 <div>
@@ -87,7 +95,7 @@
                 const msg = JSON.parse(event.data);
                 if (!msg.code) return;
                 code = msg.code;
-							document.getElementById('code').innerHTML = `👨‍🍳 Code is ready: <b>${code}</b><br/><br/><span onclick="navigator.clipboard.writeText('${location.origin}/?code=${code}')" class="inverted" >Copy to clipboard</span>`
+              document.getElementById('code').innerHTML = `👨‍🍳 Code is ready: <b>${code}</b><br/><br/><span onclick="navigator.clipboard.writeText('${location.origin}/?code=${code}')" class="inverted" >Copy to clipboard</span>`
             } else {
                 if (event.data == "LET_IT_RIP") {
                     document.getElementById('code').innerHTML = `
@@ -183,27 +191,17 @@
     });
 
     document.getElementById('restore-btn').addEventListener('click', () => {
-        sender = undefined;
-        code = undefined;
-        file = undefined;
-        receiver = undefined;
-        metadata = undefined;
-        receivedChunks = [];
-        totalReceived = 0;
-
-        document.getElementById('status').innerHTML = '';
-        document.getElementById('code').innerHTML = ''
-
+        location.reload();
     })
 
-		window.addEventListener("load", (event) => {
-			const searchParams = new URLSearchParams(location.search);
-			const code = searchParams.get("code");
-			if (code) {
-				console.log('prefilling code', code);
+    window.addEventListener("load", (event) => {
+      const searchParams = new URLSearchParams(location.search);
+      const code = searchParams.get("code");
+      if (code) {
+        console.log('prefilling code', code);
         document.getElementById('code-input').value = code;
-			}
-		});
+      }
+    });
 
 </script>
 
