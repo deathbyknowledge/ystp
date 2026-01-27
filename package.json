@@ -2,6 +2,9 @@
   "name": "ystp",
   "version": "0.0.0",
   "private": true,
+  "bin": {
+    "ystp": "./cli/ystp.js"
+  },
   "scripts": {
     "deploy": "wrangler deploy",
     "dev": "wrangler dev",
@@ -14,7 +17,8 @@
     "@cloudflare/workers-types": "^4.20250109.0",
     "typescript": "^5.5.2",
     "vitest": "2.1.8",
-    "wrangler": "^3.103.2"
+    "wrangler": "^3.103.2",
+    "ws": "^8.19.0"
   },
   "dependencies": {
     "hono": "^4.6.17"
