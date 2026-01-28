@@ -17,6 +17,10 @@
     "wrangler": "^3.103.2"
   },
   "dependencies": {
-    "hono": "^4.6.17"
+    "hono": "^4.6.17",
+    "ws": "^8.13.0"
+  },
+  "bin": {
+    "ystp": "./cli/ystp.mjs"
   }
 }
